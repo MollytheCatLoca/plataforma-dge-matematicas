@@ -2,6 +2,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import AuthContext from '@/context/AuthContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -19,11 +20,13 @@ export default function RootLayout({ children }: Readonly<RootLayoutProps>) {
   return (
     <html lang="es">
       <body className={inter.className}>
-        {/* Podés insertar acá un componente <Header /> si lo necesitás */}
-        <main className="min-h-screen">
-          {children}
-        </main>
-        {/* Y acá un <Footer /> */}
+        <AuthContext>
+          {/* Podés insertar acá un componente <Header /> si lo necesitás */}
+          <main className="min-h-screen">
+            {children}
+          </main>
+          {/* Y acá un <Footer /> */}
+        </AuthContext>
       </body>
     </html>
   );

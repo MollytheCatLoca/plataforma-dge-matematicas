@@ -2,27 +2,35 @@
 'use client'; 
 
 import { useState } from 'react';
-import { authenticate } from '@/app/login/actions'; // ¡Importa la acción!
+import { signIn } from 'next-auth/react'; // Usar signIn de next-auth
 import Link from 'next/link'; // Para los enlaces inferiores
 
 export default function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  async function handleServerAction(formData: FormData) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     setIsLoading(true);
     setError(null);
+    const formData = new FormData(e.currentTarget);
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
-    const result = await authenticate(email, password);
+    // Usar signIn de next-auth con redirect: false
+    const result = await signIn('credentials', {
+      redirect: false,
+      email,
+      password,
+      callbackUrl: '/dashboard',
+    });
     if (result?.error) setError(result.error);
-    else if (result?.success) window.location.href = '/dashboard';
+    else if (result?.ok) window.location.href = '/dashboard';
     else setError('Respuesta inesperada del servidor.');
     setIsLoading(false);
   }
 
   return (
-    <form action={handleServerAction} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
         <div className="p-3 my-2 bg-red-100 border border-red-400 text-red-700 rounded-md text-sm">
           {error}
