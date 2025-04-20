@@ -1,0 +1,472 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// schema.prisma
+
+// 1. Configuración del Datasource (Base de Datos)
+datasource db {
+  provider = "postgresql" // Usaremos PostgreSQL
+  url      = env("DATABASE_URL") // La URL se carga desde variables de entorno
+}
+
+// 2. Configuración del Generador (Prisma Client)
+generator client {
+  provider = "prisma-client-js" // Genera el cliente Prisma para TypeScript/JavaScript
+}
+
+// 3. Definición de Modelos (Tablas) y Enums
+
+// --- Enums ---
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  SCHOOL_ADMIN
+  DGE_ADMIN // Administrador global de la plataforma
+}
+
+enum ContentType {
+  VIDEO
+  PDF
+  SIMULATION
+  EXERCISE_SET // Una colección de ejercicios interactivos
+  EVALUATION   // Un examen/evaluación formal
+  EXTERNAL_LINK
+  TEXT_CONTENT // Contenido de texto enriquecido directamente en la plataforma
+  IMAGE
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SubmissionStatus {
+  PENDING     // El estudiante no ha enviado nada
+  IN_PROGRESS // El estudiante empezó pero no envió (si aplica)
+  SUBMITTED   // El estudiante envió
+  GRADED      // El docente calificó
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE // Opción múltiple (una respuesta correcta)
+  MULTIPLE_SELECT // Opción múltiple (varias respuestas correctas)
+  TRUE_FALSE
+  SHORT_ANSWER    // Texto corto
+  NUMERIC         // Respuesta numérica
+  ESSAY           // Respuesta larga/desarrollo
+  MATH_INTERACTIVE // Tipo específico para ejercicios matemáticos interactivos (puede requerir JSON para la configuración)
+  FILL_IN_THE_BLANK
+  MATCHING        // Relacionar conceptos
+}
+
+enum NotificationType {
+  NEW_ASSIGNMENT
+  ASSIGNMENT_DUE
+  NEW_GRADE
+  NEW_MESSAGE
+  FORUM_REPLY
+  SYSTEM_ANNOUNCEMENT
+  AI_ALERT // Ej. Alerta de dificultad para docente
+}
+
+enum AISupportType {
+  DIFFICULTY_ALERT
+  RESOURCE_SUGGESTION
+  PERFORMANCE_SUMMARY
+}
+
+// --- Modelos ---
+
+model User {
+  id            String        @id @default(cuid()) // ID único tipo CUID (recomendado)
+  email         String        @unique // El email será el identificador único para login
+  hashedPassword String       // Contraseña siempre hasheada
+  firstName     String
+  lastName      String
+  role          UserRole
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  schoolId      String?       // Opcional si el DGE_ADMIN no pertenece a una escuela específica
+  school        School?       @relation(fields: [schoolId], references: [id])
+
+  // Relaciones (lo que este usuario puede hacer/tener)
+  createdContent     ContentResource[] @relation("CreatedBy")
+  assignedClasses    Class[]           @relation("TaughtBy") // Clases que enseña (si es TEACHER)
+  enrollments        ClassEnrollment[] // Clases en las que está inscrito (si es STUDENT)
+  assignmentsGiven   Assignment[]      @relation("AssignedBy") // Tareas asignadas (si es TEACHER)
+  submissions        Submission[]      // Entregas realizadas (si es STUDENT)
+  answers            Answer[]          // Respuestas dadas (si es STUDENT)
+  aiTutorLogs        AITutorLog[]      // Logs de interacción con Tutor IA (si es STUDENT)
+  aiSupportLogs      AISupportLog[]    // Logs de soporte IA recibidos (si es TEACHER)
+  sentMessages       Message[]         @relation("SentMessages")
+  receivedMessages   Message[]         @relation("ReceivedMessages")
+  forumThreads       ForumThread[]     // Hilos creados
+  forumPosts         ForumPost[]       // Posts creados
+  notifications      Notification[]    // Notificaciones recibidas
+  userBadges         UserBadge[]       // Badges ganados
+  userPoints         UserPoints?       // Puntos acumulados
+  pointsLogs         PointsLog[]       // Historial de puntos
+
+  @@index([schoolId])
+}
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  cue       String?  @unique // Código Único de Establecimiento (si aplica)
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]   // Usuarios pertenecientes a esta escuela
+  classes   Class[]  // Clases de esta escuela
+}
+
+// Modelo para la estructura curricular (ej. Año -> Eje -> Tema)
+model CurriculumNode {
+  id          String  @id @default(cuid())
+  name        String  // Ej: "1er Año", "Números Enteros", "Operaciones Básicas"
+  description String?
+  // Jerarquía: Un nodo puede tener un padre (ej. un Tema pertenece a un Eje)
+  parentId    String?
+  parent      CurriculumNode?  @relation("CurriculumHierarchy", fields: [parentId], references: [id])
+  children    CurriculumNode[] @relation("CurriculumHierarchy")
+  order       Int?             // Para ordenar nodos del mismo nivel
+
+  // Contenidos asociados a este nodo curricular
+  contentResources ContentResource[]
+
+  @@index([parentId])
+}
+
+model ContentResource {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  type        ContentType
+  status      ContentStatus @default(DRAFT)
+  contentUrl  String?       // URL si es externo o almacenado en S3/CDN
+  contentBody Json?         // Contenido directo (ej. texto, config JSON para interactivos)
+  // Importante: Para contenido matemático en 'contentBody' o texto, usar formato estándar como LaTeX o MathML.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdById String
+  createdBy   User   @relation("CreatedBy", fields: [createdById], references: [id])
+
+  curriculumNodeId String? // A qué parte del currículum pertenece
+  curriculumNode   CurriculumNode? @relation(fields: [curriculumNodeId], references: [id])
+
+  assignments Assignment[] // Dónde se ha asignado este contenido
+  evaluation  Evaluation?  // Si este contenido ES una evaluación
+
+  @@index([createdById])
+  @@index([curriculumNodeId])
+}
+
+model Class {
+  id          String   @id @default(cuid())
+  name        String   // Ej: "Matemáticas 1A"
+  description String?
+  academicYear Int      // Ej: 2025
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  schoolId    String
+  school      School @relation(fields: [schoolId], references: [id])
+
+  teacherId   String
+  teacher     User   @relation("TaughtBy", fields: [teacherId], references: [id])
+
+  enrollments ClassEnrollment[] // Estudiantes inscritos
+  assignments Assignment[]      // Tareas de esta clase
+  forumThreads ForumThread[]    // Foros de esta clase
+
+  @@index([schoolId])
+  @@index([teacherId])
+}
+
+// Tabla intermedia para la relación Muchos-a-Muchos entre Clases y Estudiantes
+model ClassEnrollment {
+  enrollmentDate DateTime @default(now())
+  isActive       Boolean  @default(true)
+
+  classId   String
+  class     Class  @relation(fields: [classId], references: [id])
+  studentId String
+  student   User   @relation(fields: [studentId], references: [id])
+
+  @@id([classId, studentId]) // Clave primaria compuesta
+  @@index([studentId])
+}
+
+model Assignment {
+  id          String    @id @default(cuid())
+  title       String?   // Opcional, puede tomar el título del contenido
+  instructions String?
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  classId   String
+  class     Class  @relation(fields: [classId], references: [id])
+
+  contentResourceId String // Qué contenido/evaluación se asigna
+  contentResource   ContentResource @relation(fields: [contentResourceId], references: [id])
+
+  assignedById String // Quién lo asignó (Docente)
+  assignedBy   User   @relation("AssignedBy", fields: [assignedById], references: [id])
+
+  submissions Submission[] // Entregas para esta tarea
+
+  @@index([classId])
+  @@index([contentResourceId])
+  @@index([assignedById])
+}
+
+model Submission {
+  id        String   @id @default(cuid())
+  submittedAt DateTime? // Fecha de entrega efectiva
+  grade       Float?   // Calificación numérica (si aplica)
+  feedback    String?  // Comentarios del docente
+  status      SubmissionStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id])
+
+  studentId    String
+  student      User   @relation(fields: [studentId], references: [id])
+
+  // Respuestas específicas (si es una evaluación)
+  answers      Answer[]
+
+  // Para tareas de entrega simple (ej. subir archivo, texto)
+  submissionContent String? // Puede ser un path a un archivo, o texto directo
+
+  @@index([assignmentId])
+  @@index([studentId])
+}
+
+// Modelo específico si el ContentResource es de tipo EVALUATION
+model Evaluation {
+  id               String  @id @default(cuid())
+  timeLimitMinutes Int?    // Tiempo límite en minutos
+  maxAttempts      Int?    @default(1) // Intentos permitidos
+  shuffleQuestions Boolean @default(false) // Mezclar preguntas
+  showResult       Boolean @default(true) // Mostrar resultado al estudiante al finalizar
+
+  contentResourceId String          @unique // Una evaluación corresponde a un único recurso de contenido
+  contentResource   ContentResource @relation(fields: [contentResourceId], references: [id])
+
+  questions Question[] // Preguntas de esta evaluación
+
+  @@index([contentResourceId])
+}
+
+model Question {
+  id            String       @id @default(cuid())
+  text          String       // Texto de la pregunta (puede incluir LaTeX)
+  type          QuestionType
+  options       Json?        // JSON para opciones (ej: [{"id": "a", "text": "..."}, ...]) o configuración de interactivo
+  correctAnswer Json?        // JSON o String con la respuesta/s correcta/s
+  points        Float        @default(1) // Puntos que vale la pregunta
+  order         Int?         // Orden dentro de la evaluación
+
+  evaluationId  String
+  evaluation    Evaluation @relation(fields: [evaluationId], references: [id])
+
+  answers       Answer[]     // Respuestas dadas a esta pregunta
+
+  @@index([evaluationId])
+}
+
+model Answer {
+  id            String  @id @default(cuid())
+  answerContent Json    // Respuesta del estudiante (texto, ID de opción seleccionada, etc.)
+  isCorrect     Boolean? // Si la corrección automática aplica
+  score         Float?  // Puntaje obtenido en esta respuesta
+  answeredAt    DateTime @default(now())
+
+  submissionId  String   // A qué intento/entrega pertenece esta respuesta
+  submission    Submission @relation(fields: [submissionId], references: [id])
+
+  questionId    String
+  question      Question @relation(fields: [questionId], references: [id])
+
+  studentId     String   // Quién respondió
+  student       User     @relation(fields: [studentId], references: [id])
+
+  @@index([submissionId])
+  @@index([questionId])
+  @@index([studentId])
+}
+
+// --- Modelos para IA ---
+
+model AITutorLog {
+  id               String    @id @default(cuid())
+  sessionId        String    // Para agrupar interacciones de una misma "conversación"
+  timestamp        DateTime  @default(now())
+  userQuery        String
+  aiResponse       String
+  context          Json?     // Contexto (ej. ID del contenido relacionado)
+  safetyFlags      Json?     // Indicadores de seguridad de la IA
+  explainabilityInfo Json?   // Datos sobre cómo la IA llegó a la respuesta (si aplica)
+
+  studentId        String
+  student          User      @relation(fields: [studentId], references: [id])
+
+  @@index([studentId])
+  @@index([sessionId])
+}
+
+model AISupportLog {
+  id               String       @id @default(cuid())
+  type             AISupportType
+  details          Json         // Contenido de la alerta/sugerencia
+  timestamp        DateTime     @default(now())
+  acknowledged     Boolean      @default(false) // Si el docente marcó como vista/gestionada
+
+  teacherId        String
+  teacher          User         @relation(fields: [teacherId], references: [id])
+
+  // Opcional: a qué estudiante/s se refiere la alerta/sugerencia
+  relatedStudentId String?
+  // relatedStudent User? @relation("RelatedStudent", fields: [relatedStudentId], references: [id]) // Prisma no soporta nombres de relación múltiples al mismo modelo así fácilmente sin @map
+
+  @@index([teacherId])
+  @@index([relatedStudentId])
+  @@index([type])
+}
+
+// --- Modelos para Comunicación ---
+
+model Message {
+  id        String    @id @default(cuid())
+  subject   String?
+  body      String
+  sentAt    DateTime  @default(now())
+  readAt    DateTime? // Null si no ha sido leído
+
+  senderId    String
+  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
+
+  recipientId String
+  recipient   User     @relation("ReceivedMessages", fields: [recipientId], references: [id])
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([readAt])
+}
+
+model ForumThread {
+  id        String     @id @default(cuid())
+  title     String
+  createdAt DateTime   @default(now())
+  isLocked  Boolean    @default(false) // Si se cierra a nuevas respuestas
+
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  // Opcional: Asociar foro a una clase específica
+  classId     String?
+  class       Class?   @relation(fields: [classId], references: [id])
+
+  posts       ForumPost[] // Posts dentro de este hilo
+
+  @@index([createdById])
+  @@index([classId])
+}
+
+model ForumPost {
+  id        String    @id @default(cuid())
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  threadId  String
+  thread    ForumThread @relation(fields: [threadId], references: [id])
+
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id])
+
+  // Para respuestas anidadas
+  parentId  String?
+  parent    ForumPost?  @relation("Replies", fields: [parentId], references: [id], onDelete: Cascade) // Ojo con Cascade
+  replies   ForumPost[] @relation("Replies")
+
+  @@index([threadId])
+  @@index([authorId])
+  @@index([parentId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  content   String
+  type      NotificationType
+  link      String?          // URL a la que lleva la notificación (ej. a la tarea)
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  userId    String           // A quién pertenece la notificación
+  user      User             @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+// --- Modelos para Gamificación (Opcional) ---
+
+model GamificationBadge {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  description String
+  iconUrl     String      // URL del icono del badge
+  criteria    Json?       // (Opcional) JSON describiendo cómo se gana
+
+  userBadges  UserBadge[]
+}
+
+model UserBadge {
+  earnedAt DateTime @default(now())
+
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+  badgeId String
+  badge   GamificationBadge @relation(fields: [badgeId], references: [id])
+
+  @@id([userId, badgeId]) // Clave primaria compuesta
+  @@index([badgeId])
+}
+
+model UserPoints {
+  totalPoints Int      @default(0)
+
+  userId String   @id // Relación uno a uno con User
+  user   User     @relation(fields: [userId], references: [id])
+}
+
+model PointsLog {
+  id            String   @id @default(cuid())
+  pointsAwarded Int
+  reason        String?  // Ej: "Completó actividad X"
+  timestamp     DateTime @default(now())
+
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+
+  // Opcional: Referencia a la entidad que otorgó los puntos
+  // submissionId String?
+  // submission Submission? @relation(fields: [submissionId], references: [id])
+
+  @@index([userId])
+}
