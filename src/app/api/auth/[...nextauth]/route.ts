@@ -1,3 +1,4 @@
+// src/app/api/auth/[...nextauth]/route.ts
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { compare } from "bcrypt";
 import NextAuth, { AuthOptions } from "next-auth";
@@ -15,7 +16,7 @@ export const authOptions: AuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          throw new Error("Credenciales incompletas");
+          throw new Error("Email y contraseña son requeridos");
         }
 
         const user = await prisma.user.findUnique({
@@ -25,7 +26,7 @@ export const authOptions: AuthOptions = {
         });
 
         if (!user || !user.hashedPassword) {
-          throw new Error("Usuario no encontrado");
+          throw new Error("Credenciales inválidas");
         }
 
         if (!user.isActive) {
@@ -38,7 +39,7 @@ export const authOptions: AuthOptions = {
         );
 
         if (!isPasswordValid) {
-          throw new Error("Contraseña incorrecta");
+          throw new Error("Credenciales inválidas");
         }
 
         return {

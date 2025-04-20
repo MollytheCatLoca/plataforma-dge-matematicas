@@ -1,4 +1,4 @@
-// src/app/page.tsx
+// src/app/page.tsx - Corregido
 import Link from 'next/link';
 
 export default function HomePage() {
@@ -12,15 +12,15 @@ export default function HomePage() {
         impulsado por la Dirección General de Escuelas.
       </p>
       <div className="flex space-x-4">
-        <Link href="/login" className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-300">
+        {/* Usar un <a> en lugar de Link para debugging */}
+        <a href="/login" className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-300">
           Iniciar Sesión
-        </Link>
-        {/* Podríamos añadir un botón de Registro más tarde */}
-        {/* <Link href="/register" className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition duration-300">
-          Registrarse
+        </a>
+        {/* También prueba con Link normal */}
+        {/* <Link href="/login" className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-300">
+          Iniciar Sesión
         </Link> */}
       </div>
-      {/* Aquí podrías añadir secciones de características, etc. */}
     </div>
   );
 }

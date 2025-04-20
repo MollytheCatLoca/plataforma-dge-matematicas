@@ -2,31 +2,50 @@
 'use client'; 
 
 import { useState } from 'react';
-import { signIn } from 'next-auth/react'; // Usar signIn de next-auth
-import Link from 'next/link'; // Para los enlaces inferiores
+import { signIn } from 'next-auth/react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function LoginForm() {
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(
+    searchParams.get('error') ? 'Error de autenticación. Verifica tus credenciales.' : null
+  );
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    
     const formData = new FormData(e.currentTarget);
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
-    // Usar signIn de next-auth con redirect: false
-    const result = await signIn('credentials', {
-      redirect: false,
-      email,
-      password,
-      callbackUrl: '/dashboard',
-    });
-    if (result?.error) setError(result.error);
-    else if (result?.ok) window.location.href = '/dashboard';
-    else setError('Respuesta inesperada del servidor.');
-    setIsLoading(false);
+    
+    console.log("Intentando iniciar sesión con:", email); // Para debugging
+    
+    try {
+      const result = await signIn('credentials', {
+        redirect: false,
+        email,
+        password,
+      });
+      
+      console.log("Resultado de signIn:", result); // Para debugging
+      
+      if (result?.error) {
+        setError('Credenciales inválidas. Verifica tu email y contraseña.');
+      } else if (result?.ok) {
+        router.push(callbackUrl);
+        router.refresh();
+      }
+    } catch (error) {
+      console.error('Error durante la autenticación:', error);
+      setError('Error en el servidor. Intente de nuevo más tarde.');
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -66,25 +85,14 @@ export default function LoginForm() {
         <button
           type="submit"
           disabled={isLoading}
-          className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+          className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
             isLoading
               ? 'bg-gray-400 cursor-not-allowed'
               : 'bg-blue-600 hover:bg-blue-700 transition duration-300'
-          }`}
+          } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
         >
           {isLoading ? 'Ingresando...' : 'Ingresar'}
         </button>
-      </div>
-      <div className="text-sm text-center">
-        <Link href="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
-          ¿Olvidaste tu contraseña?
-        </Link>
-      </div>
-      <div className="text-sm text-center">
-        <span className="text-gray-600">¿No tienes cuenta? </span>
-        <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
-          Registrate
-        </Link>
       </div>
     </form>
   );

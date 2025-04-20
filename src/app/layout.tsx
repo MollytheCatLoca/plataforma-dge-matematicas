@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import AuthContext from '@/context/AuthContext';
+import Navbar from '@/components/Navbar';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -16,16 +17,14 @@ interface RootLayoutProps {
 }
 
 export default function RootLayout({ children }: Readonly<RootLayoutProps>) {
-  // Layout principal de la app
   return (
     <html lang="es">
       <body className={inter.className}>
         <AuthContext>
-          {/* Podés insertar acá un componente <Header /> si lo necesitás */}
-          <main className="min-h-screen">
+          <Navbar />
+          <main className="min-h-screen bg-gray-50 pt-4">
             {children}
           </main>
-          {/* Y acá un <Footer /> */}
         </AuthContext>
       </body>
     </html>
