@@ -1,5 +1,5 @@
 import "next-auth";
-import { UserRole } from "@prisma/client";
+import { UserRole, GradeLevel } from "@prisma/client";
 
 declare module "next-auth" {
   interface Session {
@@ -12,6 +12,7 @@ declare module "next-auth" {
       image?: string;
       isActive: boolean;
       schoolId?: string;
+      gradeLevel?: GradeLevel;
     };
   }
 
@@ -23,6 +24,7 @@ declare module "next-auth" {
     role: UserRole;
     isActive: boolean;
     schoolId?: string;
+    gradeLevel?: GradeLevel;
   }
 }
 
@@ -35,5 +37,6 @@ declare module "next-auth/jwt" {
     role: UserRole;
     isActive: boolean;
     schoolId?: string;
+    gradeLevel?: GradeLevel;
   }
 }

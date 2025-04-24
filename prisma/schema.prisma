@@ -80,6 +80,12 @@ enum AISupportType {
   PERFORMANCE_SUMMARY
 }
 
+enum GradeLevel {
+  FIRST
+  SECOND
+  THIRD
+}
+
 // --- Modelos ---
 
 model User {
@@ -113,6 +119,8 @@ model User {
   userBadges         UserBadge[]       // Badges ganados
   userPoints         UserPoints?       // Puntos acumulados
   pointsLogs         PointsLog[]       // Historial de puntos
+  gradeLevel         GradeLevel?       // Nivel de grado del estudiante
+  comments           Comment[]         // Comentarios realizados por el usuario
 
   @@index([schoolId])
 }
@@ -147,25 +155,35 @@ model CurriculumNode {
 }
 
 model ContentResource {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  type        ContentType
-  status      ContentStatus @default(DRAFT)
-  contentUrl  String?       // URL si es externo o almacenado en S3/CDN
-  contentBody Json?         // Contenido directo (ej. texto, config JSON para interactivos)
-  // Importante: Para contenido matemático en 'contentBody' o texto, usar formato estándar como LaTeX o MathML.
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String        @id @default(cuid())
+  title         String
+  description   String?
+  summary       String?       // Resumen breve para vistas previas
+  type          ContentType
+  status        ContentStatus @default(DRAFT)
+  contentUrl    String?       // URL si es externo o almacenado en S3/CDN
+  imageUrl      String?       // Imagen de portada o miniatura
+  contentBody   Json?         // Contenido directo (ej. texto, config JSON para interactivos)
+  tags          String[]      // Etiquetas para búsqueda y filtrado
+  metadata      Json?         // Campo extensible para configuraciones extra
+  gradeLevels   GradeLevel[]  @default([]) // Grados a los que aplica el contenido
+  authorName    String?       // Si el autor no es usuario registrado
+  duration      Int?          // Duración en segundos (videos, audios)
+  externalId    String?       // Para integración con otros sistemas
+  order         Int?          // Para ordenar dentro de una colección/secuencia
+  visibility    String?       // público, privado, restringido, etc.
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  createdById String
-  createdBy   User   @relation("CreatedBy", fields: [createdById], references: [id])
+  createdById       String
+  createdBy         User   @relation("CreatedBy", fields: [createdById], references: [id])
 
-  curriculumNodeId String? // A qué parte del currículum pertenece
-  curriculumNode   CurriculumNode? @relation(fields: [curriculumNodeId], references: [id])
+  curriculumNodeId  String? // A qué parte del currículum pertenece
+  curriculumNode    CurriculumNode? @relation(fields: [curriculumNodeId], references: [id])
 
-  assignments Assignment[] // Dónde se ha asignado este contenido
-  evaluation  Evaluation?  // Si este contenido ES una evaluación
+  assignments       Assignment[] // Dónde se ha asignado este contenido
+  evaluation        Evaluation?  // Si este contenido ES una evaluación
+  comments          Comment[]    // Comentarios y valoraciones de los usuarios
 
   @@index([createdById])
   @@index([curriculumNodeId])
@@ -422,6 +440,25 @@ model Notification {
 
   @@index([userId])
   @@index([isRead])
+}
+
+// --- Modelos para Interacción y Feedback ---
+
+model Comment {
+  id        String   @id @default(cuid())
+  text      String
+  rating    Int?     // Valoración opcional (ej. 1 a 5)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  authorId  String
+  author    User   @relation(fields: [authorId], references: [id])
+
+  contentResourceId String
+  contentResource   ContentResource @relation(fields: [contentResourceId], references: [id])
+
+  @@index([authorId])
+  @@index([contentResourceId])
 }
 
 // --- Modelos para Gamificación (Opcional) ---

@@ -49,7 +49,8 @@ export const authOptions: AuthOptions = {
           lastName: user.lastName,
           role: user.role,
           isActive: user.isActive,
-          schoolId: user.schoolId || undefined
+          schoolId: user.schoolId || undefined,
+          gradeLevel: user.gradeLevel || undefined
         };
       }
     })
@@ -71,6 +72,7 @@ export const authOptions: AuthOptions = {
         token.role = user.role;
         token.isActive = user.isActive;
         token.schoolId = user.schoolId;
+        token.gradeLevel = user.gradeLevel || null;
       }
       return token;
     },
@@ -83,6 +85,7 @@ export const authOptions: AuthOptions = {
         session.user.role = token.role;
         session.user.isActive = token.isActive;
         session.user.schoolId = token.schoolId;
+        session.user.gradeLevel = token.gradeLevel;
       }
       return session;
     }

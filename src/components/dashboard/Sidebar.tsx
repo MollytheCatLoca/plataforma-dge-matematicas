@@ -45,6 +45,7 @@ const roleSpecificModules = {
     { name: 'Mis Clases', href: '/dashboard/mis-clases', icon: Calendar },
     { name: 'Tareas', href: '/dashboard/tareas', icon: FileText },
     { name: 'Materiales', href: '/dashboard/materiales', icon: Book },
+    { name: 'Contenidos', href: '/dashboard/contenidos', icon: Book },
   ],
 };
 
