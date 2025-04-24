@@ -2,6 +2,7 @@
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { redirect } from 'next/navigation';
+import AuthProvider from '@/components/auth/AuthProvider';
 import Sidebar from '@/components/dashboard/Sidebar';
 import DashboardNavbar from '@/components/dashboard/DashboardNavbar';
 
@@ -18,20 +19,22 @@ export default async function DashboardLayout({
   }
   
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <Sidebar />
+    <AuthProvider session={session}>
+      <div className="flex h-screen bg-gray-100">
+        {/* Sidebar */}
+        <Sidebar />
 
-      {/* Área Principal (Navbar + Contenido) */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Navbar Superior */}
-        <DashboardNavbar user={session.user} />
+        {/* Área Principal (Navbar + Contenido) */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Navbar Superior */}
+          <DashboardNavbar user={session.user} />
 
-        {/* Contenido de la Página */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
-          {children}
-        </main>
+          {/* Contenido de la Página */}
+          <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </AuthProvider>
   );
 }

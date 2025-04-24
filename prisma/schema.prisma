@@ -103,16 +103,16 @@ model User {
   school   School? @relation(fields: [schoolId], references: [id])
 
   // Relaciones (lo que este usuario puede hacer/tener)
-  createdContent        ContentResource[]      @relation("CreatedBy")
-  assignedClasses       Class[]                @relation("TaughtBy") // Clases que enseña (si es TEACHER)
+  createdContent        ContentResource[]       @relation("CreatedBy")
+  assignedClasses       Class[]                 @relation("TaughtBy") // Clases que enseña (si es TEACHER)
   enrollments           ClassEnrollment[] // Clases en las que está inscrito (si es STUDENT)
-  assignmentsGiven      Assignment[]           @relation("AssignedBy") // Tareas asignadas (si es TEACHER)
+  assignmentsGiven      Assignment[]            @relation("AssignedBy") // Tareas asignadas (si es TEACHER)
   submissions           Submission[] // Entregas realizadas (si es STUDENT)
   answers               Answer[] // Respuestas dadas (si es STUDENT)
   aiTutorLogs           AITutorLog[] // Logs de interacción con Tutor IA (si es STUDENT)
   aiSupportLogs         AISupportLog[] // Logs de soporte IA recibidos (si es TEACHER)
-  sentMessages          Message[]              @relation("SentMessages")
-  receivedMessages      Message[]              @relation("ReceivedMessages")
+  sentMessages          Message[]               @relation("SentMessages")
+  receivedMessages      Message[]               @relation("ReceivedMessages")
   forumThreads          ForumThread[] // Hilos creados
   forumPosts            ForumPost[] // Posts creados
   notifications         Notification[] // Notificaciones recibidas
@@ -125,6 +125,7 @@ model User {
   UserLearningAnalytics UserLearningAnalytics?
   ClassAlert            ClassAlert[]
   createdSequences      LearningSequence[] // Secuencias de aprendizaje creadas por el usuario
+  assignedSequences     ClassLearningSequence[] @relation("AssignedByUser")
 
   @@index([schoolId])
 }
@@ -230,7 +231,7 @@ model ContentResource {
   comments              Comment[] // Comentarios y valoraciones de los usuarios
   ContentProgress       ContentProgress[]
   ContentRecommendation ContentRecommendation[]
-  sequencePosition      SequencePosition? // Posición en una secuencia de aprendizaje
+  sequencePositions     SequencePosition[] // Un contenido puede estar en varias posiciones
 
   @@index([createdById])
   @@index([curriculumNodeId])
@@ -250,10 +251,11 @@ model Class {
   teacherId String
   teacher   User   @relation("TaughtBy", fields: [teacherId], references: [id])
 
-  enrollments   ClassEnrollment[] // Estudiantes inscritos
-  assignments   Assignment[] // Tareas de esta clase
-  forumThreads  ForumThread[] // Foros de esta clase
-  ClassProgress ClassProgress?
+  enrollments       ClassEnrollment[] // Estudiantes inscritos
+  assignments       Assignment[] // Tareas de esta clase
+  forumThreads      ForumThread[] // Foros de esta clase
+  ClassProgress     ClassProgress?
+  assignedSequences ClassLearningSequence[]
 
   @@index([schoolId])
   @@index([teacherId])
@@ -760,25 +762,48 @@ enum AlertPriority {
 
 // [Nuevos modelos para secuencias de aprendizaje]
 model LearningSequence {
-  id               String              @id @default(cuid())
+  id               String                  @id @default(cuid())
   name             String
   description      String?
   curriculumNodeId String?
-  curriculumNode   CurriculumNode?     @relation(fields: [curriculumNodeId], references: [id])
+  curriculumNode   CurriculumNode?         @relation(fields: [curriculumNodeId], references: [id])
   contents         SequencePosition[]
   createdById      String
-  createdBy        User                @relation(fields: [createdById], references: [id])
-  isTemplate       Boolean             @default(false)
+  createdBy        User                    @relation(fields: [createdById], references: [id])
+  isTemplate       Boolean                 @default(false)
+  classAssignments ClassLearningSequence[]
 }
 
 model SequencePosition {
   id                String           @id @default(cuid())
-  contentResourceId String           @unique
+  contentResourceId String
   contentResource   ContentResource  @relation(fields: [contentResourceId], references: [id])
   sequenceId        String
   sequence          LearningSequence @relation(fields: [sequenceId], references: [id])
-  position          Int              // Posición en la secuencia
+  position          Int // Posición en la secuencia
   isOptional        Boolean          @default(false)
-  
+
   @@unique([sequenceId, position])
+}
+
+model ClassLearningSequence {
+  id           String    @id @default(cuid())
+  assignedAt   DateTime  @default(now())
+  dueDate      DateTime?
+  instructions String?
+  isActive     Boolean   @default(true)
+
+  classId String
+  class   Class  @relation(fields: [classId], references: [id])
+
+  sequenceId String
+  sequence   LearningSequence @relation(fields: [sequenceId], references: [id])
+
+  assignedById String
+  assignedBy   User   @relation("AssignedByUser", fields: [assignedById], references: [id]) // Actualizado para coincidir
+
+  @@unique([classId, sequenceId])
+  @@index([classId])
+  @@index([sequenceId])
+  @@index([assignedById])
 }

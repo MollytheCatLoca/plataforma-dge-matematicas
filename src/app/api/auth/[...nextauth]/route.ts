@@ -63,29 +63,31 @@ export const authOptions: AuthOptions = {
     strategy: "jwt",
   },
   callbacks: {
-    jwt: ({ token, user }) => {
+    jwt: async ({ token, user }) => {
       if (user) {
         token.id = user.id;
         token.email = user.email;
         token.firstName = user.firstName;
         token.lastName = user.lastName;
-        token.role = user.role;
+        token.role = user.role; // Se asigna el rol
         token.isActive = user.isActive;
         token.schoolId = user.schoolId;
         token.gradeLevel = user.gradeLevel || null;
+        console.log("JWT callback - user role:", user.role);
       }
       return token;
     },
-    session: ({ session, token }) => {
+    session: async ({ session, token }) => {
       if (token) {
         session.user.id = token.id;
         session.user.email = token.email;
         session.user.firstName = token.firstName;
         session.user.lastName = token.lastName;
-        session.user.role = token.role;
+        session.user.role = token.role; // Se asigna el rol a la sesión
         session.user.isActive = token.isActive;
         session.user.schoolId = token.schoolId;
         session.user.gradeLevel = token.gradeLevel;
+        console.log("Session callback - user role:", token.role);
       }
       return session;
     }

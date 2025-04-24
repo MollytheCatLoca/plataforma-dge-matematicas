@@ -14,6 +14,8 @@ import {
   School,
   Calendar,
   FileText,
+  ListTree,  // Añadido para el ícono de Curriculum
+  Layers,     // Añadido para el ícono de Secuencias
   LogOut 
 } from 'lucide-react'; 
 
@@ -25,19 +27,23 @@ const commonModules = [
 const roleSpecificModules = {
   DGE_ADMIN: [
     { name: 'Escuelas', href: '/dashboard/escuelas', icon: School },
-    { name: 'Currículum', href: '/dashboard/curriculum', icon: Book },
+    { name: 'Curriculum', href: '/dashboard/curriculum', icon: ListTree }, // Añadida esta línea
+    { name: 'Secuencias', href: '/dashboard/secuencias', icon: Layers }, // Añadida esta línea
     { name: 'Reportes', href: '/dashboard/reportes', icon: BarChart3 },
     { name: 'Usuarios', href: '/dashboard/usuarios', icon: Users },
   ],
   SCHOOL_ADMIN: [
     { name: 'Docentes', href: '/dashboard/docentes', icon: Users },
     { name: 'Estudiantes', href: '/dashboard/estudiantes', icon: Users },
+    { name: 'Curriculum', href: '/dashboard/curriculum', icon: ListTree }, // Añadida esta línea
+    { name: 'Secuencias', href: '/dashboard/secuencias', icon: Layers }, // Añadida esta línea
     { name: 'Clases', href: '/dashboard/clases', icon: Calendar },
     { name: 'Reportes', href: '/dashboard/reportes', icon: BarChart3 },
   ],
   TEACHER: [
     { name: 'Mis Clases', href: '/dashboard/mis-clases', icon: Calendar },
     { name: 'Contenidos', href: '/dashboard/contenidos', icon: Book },
+    { name: 'Secuencias', href: '/dashboard/secuencias', icon: Layers }, // Añadida esta línea
     { name: 'Evaluaciones', href: '/dashboard/evaluaciones', icon: FileText },
     { name: 'Estudiantes', href: '/dashboard/mis-estudiantes', icon: Users },
   ],
