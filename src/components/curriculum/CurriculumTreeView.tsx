@@ -28,8 +28,12 @@ interface CurriculumTreeViewProps {
 // --- Helper Functions ---
 
 // Cache node lookups for performance
-const useNodeMap = (nodes: Node[]) => {
+const useNodeMap = (nodes: any) => {
   return useMemo(() => {
+    if (!Array.isArray(nodes)) {
+      console.error('Expected nodes to be an array, received:', nodes);
+      return { nodeMap: new Map<string, Node>(), childrenMap: new Map<string | null, string[]>() };
+    }
     const map = new Map<string, Node>();
     const childrenMap = new Map<string | null, string[]>();
 

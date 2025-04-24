@@ -1,4 +1,3 @@
-// src/app/dashboard/secuencias/[id]/editar/page.tsx
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
@@ -7,6 +6,7 @@ import { UserRole } from '@prisma/client';
 import Link from 'next/link';
 import SecuenciaForm from '@/components/secuencias/SecuenciaForm';
 import ContenidosSecuencia from '@/components/secuencias/ContenidosSecuencia';
+import EditarSecuenciaClient from '@/components/secuencias/EditarSecuenciaClient';
 
 interface EditarSecuenciaPageProps {
   params: {
@@ -15,20 +15,14 @@ interface EditarSecuenciaPageProps {
 }
 
 export default async function EditarSecuenciaPage({ params }: EditarSecuenciaPageProps) {
-  const { id } = params;
-  
-  // Verificar autenticación y permisos
+  // Espera a resolver params antes de usarlo
+  const resolvedParams = await Promise.resolve(params);
+  const id = resolvedParams.id;
   const session = await getServerSession(authOptions);
-  if (!session) {
-    redirect('/login');
-  }
-  
-  // Solo permitir a docentes, admins escolares y DGE admin
+  if (!session) redirect('/login');
   if (![UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.DGE_ADMIN].includes(session.user.role)) {
     redirect('/dashboard');
   }
-
-  // Obtener la secuencia y sus contenidos
   const secuencia = await prisma.learningSequence.findUnique({
     where: { id },
     include: {
@@ -44,24 +38,22 @@ export default async function EditarSecuenciaPage({ params }: EditarSecuenciaPag
             }
           }
         },
-        orderBy: {
-          position: 'asc'
-        }
+        orderBy: { position: 'asc' }
       }
     }
   });
-
-  if (!secuencia) {
-    notFound();
-  }
-
-  // Datos iniciales para el formulario
+  if (!secuencia) notFound();
   const initialData = {
     name: secuencia.name,
     description: secuencia.description || '',
     curriculumNodeId: secuencia.curriculumNodeId || '',
     isTemplate: secuencia.isTemplate
   };
+
+  // Instead of fetching via an API call, query curriculum nodes directly via Prisma.
+  const curriculumNodes = await prisma.curriculumNode.findMany({
+    orderBy: { order: 'asc' } // Adjust as needed for your schema
+  });
 
   return (
     <div className="container mx-auto p-0 sm:p-6">
@@ -83,7 +75,7 @@ export default async function EditarSecuenciaPage({ params }: EditarSecuenciaPag
           </Link>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Formulario de datos generales */}
         <div className="lg:col-span-1">
@@ -92,7 +84,6 @@ export default async function EditarSecuenciaPage({ params }: EditarSecuenciaPag
             <SecuenciaForm secuenciaId={id} initialData={initialData} />
           </div>
         </div>
-        
         {/* Editor de contenidos */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-lg shadow-md p-6">
@@ -101,6 +92,10 @@ export default async function EditarSecuenciaPage({ params }: EditarSecuenciaPag
           </div>
         </div>
       </div>
+      <section className="mt-8">
+        <h2 className="text-xl font-bold mb-4">Nodo Curricular</h2>
+        <EditarSecuenciaClient curriculumNodes={curriculumNodes} />
+      </section>
     </div>
   );
 }
