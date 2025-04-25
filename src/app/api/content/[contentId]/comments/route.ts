@@ -1,31 +1,57 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
-// GET /api/content/[contentId]/comments
-export async function GET(
-  request: Request,
-  { params }: { params: { contentId: string } }
-) {
-  const { contentId } = params;
+// Define the expected structure of the context object passed by Next.js
+interface RouteContext {
+  params: {
+    contentId: string;
+  };
+}
+
+// GET /api/content/[contentId]/comments - Fetch comments for a specific content
+export async function GET(request: NextRequest, context: RouteContext) {
+  // Access contentId from the context object's params property
+  const { contentId } = context.params;
 
   try {
+    // Optional: Check session if needed
+    // const session = await getServerSession(authOptions);
+    // if (!session) {
+    //   return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    // }
+
     const comments = await prisma.comment.findMany({
-      where: { contentResourceId: contentId },
+      where: {
+        contentResourceId: contentId,
+      },
       include: {
         author: {
-          select: { id: true, firstName: true, lastName: true }, // Incluir datos básicos del autor
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            image: true, // Include author image if available
+          },
         },
       },
       orderBy: {
-        createdAt: 'desc', // Mostrar los más recientes primero
+        createdAt: 'desc', // Show newest comments first
       },
     });
+
     return NextResponse.json(comments);
+
   } catch (error) {
-    console.error("Error fetching comments:", error);
-    return NextResponse.json({ error: 'Error al obtener comentarios' }, { status: 500 });
+    console.error(`Error fetching comments for content ${contentId}:`, error);
+    return NextResponse.json(
+      {
+        error: 'Error al obtener comentarios',
+        details: error instanceof Error ? error.message : 'Error desconocido',
+      },
+      { status: 500 }
+    );
   }
 }
 
