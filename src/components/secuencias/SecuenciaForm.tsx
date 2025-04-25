@@ -44,30 +44,39 @@ export default function SecuenciaForm({ secuenciaId, initialData }: SecuenciaFor
   const [showGradeWarning, setShowGradeWarning] = useState(false);
 
   // Cargar los nodos curriculares
-  useEffect(() => {
-    async function loadCurriculumNodes() {
-      try {
-        const res = await fetch('/api/curriculum-nodes');
-        const data = await res.json();
-        
-        if (data.nodes) {
-          setCurriculumNodes(data.nodes);
-          
-          // Si hay un nodo seleccionado, mostrar sus grados
-          if (curriculumNodeId) {
-            const selectedNode = data.nodes.find((node: any) => node.id === curriculumNodeId);
-            if (selectedNode && selectedNode.gradeLevel) {
-              setSelectedNodeGrades(selectedNode.gradeLevel);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error al cargar nodos curriculares:', err);
+  // Modifica el useEffect para cargar los nodos curriculares así:
+// Modificar el useEffect en SecuenciaForm.tsx
+useEffect(() => {
+  async function loadCurriculumNodes() {
+    try {
+      const res = await fetch('/api/curriculum-nodes');
+      if (!res.ok) {
+        throw new Error('Error en la respuesta del servidor');
       }
+      
+      const data = await res.json();
+      console.log('Datos recibidos de la API:', data); // Para depuración
+      
+      // Si la respuesta es un array, úsalo directamente
+      // Si tiene una propiedad nodes, usa esa propiedad
+      const nodesArray = Array.isArray(data) ? data : data.nodes || [];
+      
+      setCurriculumNodes(nodesArray);
+      
+      // Si hay un nodo seleccionado, mostrar sus grados
+      if (curriculumNodeId) {
+        const selectedNode = nodesArray.find((node) => node.id === curriculumNodeId);
+        if (selectedNode && selectedNode.gradeLevel) {
+          setSelectedNodeGrades(selectedNode.gradeLevel);
+        }
+      }
+    } catch (err) {
+      console.error('Error al cargar nodos curriculares:', err);
     }
-    
-    loadCurriculumNodes();
-  }, []);
+  }
+  
+  loadCurriculumNodes();
+}, [curriculumNodeId]); // Agregamos curriculumNodeId como dependencia
 
   // Actualizar grados cuando cambia el nodo seleccionado
   const handleNodeChange = (nodeId: string) => {

@@ -52,7 +52,21 @@ export default async function EditarSecuenciaPage({ params }: EditarSecuenciaPag
 
   // Instead of fetching via an API call, query curriculum nodes directly via Prisma.
   const curriculumNodes = await prisma.curriculumNode.findMany({
-    orderBy: { order: 'asc' } // Adjust as needed for your schema
+    orderBy: [
+      { order: 'asc' },
+      { name: 'asc' }
+    ],
+    include: {
+      parent: {
+        select: { 
+          id: true,
+          name: true 
+        }
+      },
+      _count: {
+        select: { children: true }
+      }
+    }
   });
 
   return (
@@ -94,7 +108,10 @@ export default async function EditarSecuenciaPage({ params }: EditarSecuenciaPag
       </div>
       <section className="mt-8">
         <h2 className="text-xl font-bold mb-4">Nodo Curricular</h2>
-        <EditarSecuenciaClient curriculumNodes={curriculumNodes} />
+        <EditarSecuenciaClient 
+        curriculumNodes={curriculumNodes} 
+        selectedNodeId={secuencia.curriculumNodeId || undefined}
+      />
       </section>
     </div>
   );

@@ -37,6 +37,7 @@ const roleSpecificModules = {
     { name: 'Estudiantes', href: '/dashboard/estudiantes', icon: Users },
     { name: 'Curriculum', href: '/dashboard/curriculum', icon: ListTree }, // Añadida esta línea
     { name: 'Secuencias', href: '/dashboard/secuencias', icon: Layers }, // Añadida esta línea
+    { name: 'Contenidos', href: '/dashboard/contenidos', icon: Book },
     { name: 'Clases', href: '/dashboard/clases', icon: Calendar },
     { name: 'Reportes', href: '/dashboard/reportes', icon: BarChart3 },
   ],
