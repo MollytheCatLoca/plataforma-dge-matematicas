@@ -40,8 +40,13 @@ interface ContentListProps {
 }
 
 export default function ContentList({ initialFilters = {} }: ContentListProps) {
+  const { data: session, status } = useSession();
+  
+  // State for readiness based on session
+  const [isReadyToFetch, setIsReadyToFetch] = useState<boolean>(status === 'authenticated');
+  // Loading state specifically for the fetch operation
+  const [loading, setLoading] = useState<boolean>(false); 
   const [contents, setContents] = useState<ContentResource[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [totalItems, setTotalItems] = useState<number>(0);
 
@@ -56,99 +61,118 @@ export default function ContentList({ initialFilters = {} }: ContentListProps) {
     tags: initialFilters.tags || []
   });
 
-  const { data: session, status: sessionStatus } = useSession();
-
+  // Effect 1: Monitor session status and update readiness
   useEffect(() => {
-    console.log('[Effect Start] Status:', sessionStatus, 'Current Page:', currentPage, 'Filters:', filters);
-
-    if (sessionStatus === 'loading') {
-      console.log('[Effect] Session loading, setting loading=true and waiting.');
-      setLoading(true);
-      return;
-    }
-
-    if (sessionStatus === 'unauthenticated' || !session) {
-      console.log('[Effect] Session unavailable. Setting loading=false.');
-      setLoading(false);
-      setError('No autenticado para ver contenidos.');
+    console.log('[Effect Session] Status:', status);
+    if (status === 'authenticated') {
+      setIsReadyToFetch(true);
+    } else {
+      setIsReadyToFetch(false);
+      // If session is lost or loading, clear data and stop loading
       setContents([]);
       setTotalItems(0);
+      setError('');
+      setLoading(false); 
+    }
+  }, [status]);
+
+  // Effect 2: Fetch data when ready and dependencies change
+  useEffect(() => {
+    // Only fetch if ready
+    if (!isReadyToFetch) {
+      console.log('[Effect Fetch] Not ready to fetch.');
       return;
     }
 
-    console.log('[Effect] Session authenticated. Setting loading=true before fetch.');
-    setError('');
-    setLoading(true);
+    console.log('[Effect Fetch] Ready. Fetching page:', currentPage, 'filters:', filters);
+    setLoading(true); // Start loading for the fetch
+    setError(''); 
 
-    let isMounted = true;
+    const controller = new AbortController();
+    const { signal } = controller;
+    let isMounted = true; 
+    
+    const safetyTimeout = setTimeout(() => {
+      console.log('[Timeout] Safety timeout triggered after 10s');
+      if (isMounted) {
+        setError('La carga tardó demasiado, por favor intente de nuevo.');
+        setLoading(false); // Stop loading on timeout
+        controller.abort(); 
+      }
+    }, 10000);
 
-    async function fetchContents() {
-      console.log('[Fetch Start] Fetching...');
+    (async () => {
       try {
         const skip = (currentPage - 1) * itemsPerPage;
         let url = `/api/contenidos?skip=${skip}&take=${itemsPerPage}`;
+        
+        // Include ALL filters in the request
         if (filters.type) url += `&type=${filters.type}`;
         if (filters.status) url += `&status=${filters.status}`;
         if (filters.gradeLevel) url += `&gradeLevel=${filters.gradeLevel}`;
         if (filters.curriculumNodeId) url += `&curriculumNodeId=${filters.curriculumNodeId}`;
         if (filters.search) url += `&search=${encodeURIComponent(filters.search)}`;
         if (filters.tags && filters.tags.length > 0) url += `&tags=${filters.tags.join(',')}`;
+        
+        console.log('[Fetch] Starting request for URL:', url);
+        const res = await fetch(url, { 
+          credentials: 'include', 
+          signal,
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
+        clearTimeout(safetyTimeout);
 
-        console.log('[Fetch] Requesting URL:', url);
-        const response = await fetch(url, { credentials: 'include' });
-        console.log('[Fetch] Response Status:', response.status);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('[Fetch Error] API response text:', errorText);
-          throw new Error(`API Error ${response.status}: ${errorText}`);
+        console.log('[Fetch] Response status:', res.status);
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error('[Fetch] Error response:', errorText);
+          throw new Error(`Error ${res.status}: ${errorText}`);
         }
 
-        const data = await response.json();
-        console.log('[Fetch Success] Received data:', data);
-
-        if (!isMounted) {
-          console.log('[Fetch Success] Component unmounted. Aborting state update.');
-          return;
+        const data = await res.json();
+        console.log('[Fetch] Received data:', data);
+        
+        // Explicitly check data structure
+        if (!data || typeof data !== 'object') {
+          throw new Error('Invalid response format: not an object');
         }
-
-        if (!data || !data.contents || !data.pagination) {
-          console.error('[Fetch Success] Invalid data format:', data);
-          throw new Error('Formato de respuesta inesperado del API');
+        
+        if (!Array.isArray(data.contents)) {
+          console.error('[Fetch] Invalid contents array:', data.contents);
+          throw new Error('Invalid response format: contents is not an array');
         }
-
-        console.log('[Fetch Success] Updating state with received data.');
-        setContents(data.contents);
-        setTotalItems(data.pagination.total);
-
-      } catch (err) {
-        console.error('[Fetch Catch] Error caught:', err);
+        
         if (isMounted) {
-          console.log('[Fetch Catch] Updating error state.');
-          setError(err instanceof Error ? err.message : 'Ocurrió un error desconocido');
+          setContents(data.contents);
+          setTotalItems(data.pagination?.total || 0);
+          // setLoading(false) handled in finally
+        }
+        
+      } catch (err: any) {
+        clearTimeout(safetyTimeout);
+        if (err.name !== 'AbortError' && isMounted) {
+          console.error('[Fetch] Error:', err);
+          setError(`Error al cargar contenidos: ${err.message}`);
           setContents([]);
           setTotalItems(0);
-        } else {
-          console.log('[Fetch Catch] Component unmounted. Not updating error state.');
+          // setLoading(false) handled in finally
         }
       } finally {
-        console.log('[Fetch Finally] Reached finally block.');
+        // Set loading to false if the component is still mounted
         if (isMounted) {
-          console.log('[Fetch Finally] Component mounted. Setting loading = false.');
-          setLoading(false);
-        } else {
-          console.log('[Fetch Finally] Component unmounted. Not setting loading state.');
+           setLoading(false);
         }
+        console.log('[Fetch] Operation completed or aborted');
       }
-    }
-
-    fetchContents();
+    })();
 
     return () => {
-      console.log('[Effect Cleanup] Unmounting or dependency change.');
-      isMounted = false;
+      controller.abort(); 
     };
-  }, [session, sessionStatus, currentPage, itemsPerPage, filters]);
+  }, [currentPage, filters, status]); 
 
   const canManageContent = session?.user.role === UserRole.TEACHER || 
                          session?.user.role === UserRole.SCHOOL_ADMIN || 
@@ -198,8 +222,19 @@ export default function ContentList({ initialFilters = {} }: ContentListProps) {
   };
   
   const handleFilterChange = (name: string, value: string) => {
+    console.log('[Debug] handleFilterChange:', name, '→', value);
     setFilters(prev => ({ ...prev, [name]: value }));
     setCurrentPage(1);
+  };
+
+  const goToPrev = () => {
+    console.log('[Debug] prev page click:', currentPage - 1);
+    setCurrentPage(prev => Math.max(prev - 1, 1));
+  };
+
+  const goToNext = () => {
+    console.log('[Debug] next page click:', currentPage + 1);
+    setCurrentPage(prev => prev + 1);
   };
   
   const handleDelete = async (id: string) => {
@@ -227,8 +262,8 @@ export default function ContentList({ initialFilters = {} }: ContentListProps) {
     }
   };
 
-  if (sessionStatus === 'loading' || loading) {
-    console.log('[Render] Rendering loading indicator. Session Status:', sessionStatus, 'Loading State:', loading);
+  if (loading) { 
+    console.log('[Render] Rendering loading indicator. Status:', status, 'Loading State:', loading);
     return (
       <div className="p-6 text-center">
         <svg className="animate-spin h-8 w-8 text-blue-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -465,14 +500,14 @@ export default function ContentList({ initialFilters = {} }: ContentListProps) {
         <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 rounded-lg shadow-sm">
           <div className="flex flex-1 justify-between sm:hidden">
             <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              onClick={goToPrev}
               disabled={currentPage === 1}
               className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Anterior
             </button>
             <button
-              onClick={() => setCurrentPage(prev => prev + 1)}
+              onClick={goToNext}
               disabled={currentPage * itemsPerPage >= totalItems}
               className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -488,7 +523,7 @@ export default function ContentList({ initialFilters = {} }: ContentListProps) {
             <div>
               <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Paginación">
                 <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  onClick={goToPrev}
                   disabled={currentPage === 1}
                   className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -503,7 +538,7 @@ export default function ContentList({ initialFilters = {} }: ContentListProps) {
                 </span>
                 
                 <button
-                  onClick={() => setCurrentPage(prev => prev + 1)}
+                  onClick={goToNext}
                   disabled={currentPage * itemsPerPage >= totalItems}
                   className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

@@ -1,5 +1,5 @@
 // src/app/api/contenidos/[id]/route.ts
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
@@ -38,17 +38,25 @@ const validateContentData = (data: any) => {
 
 // GET /api/contenidos/[id] - Obtener un contenido específico
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  console.log('[API] GET /api/contenidos/[id] - Request for content:', params.id);
+  
   try {
     // Verificar autenticación
     const session = await getServerSession(authOptions);
     if (!session) {
+      console.log('[API] Authentication failed for content retrieval');
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
-    
-    // Obtener el contenido
+
+    if (!params.id) {
+      console.log('[API] Missing content ID parameter');
+      return NextResponse.json({ error: 'ID de contenido requerido' }, { status: 400 });
+    }
+
+    // Buscar el contenido
     const content = await prisma.contentResource.findUnique({
       where: { id: params.id },
       include: {
@@ -56,43 +64,35 @@ export async function GET(
           select: {
             id: true,
             firstName: true,
-            lastName: true
+            lastName: true,
+            image: true
           }
         },
-        curriculumNode: {
-          select: {
-            id: true,
-            name: true,
-            nodeType: true,
-            gradeLevel: true
-          }
-        }
+        curriculumNode: true,
       }
     });
-    
-    // Si no existe, devolver 404
+
+    // Verificar si existe
     if (!content) {
+      console.log(`[API] Content not found: ${params.id}`);
       return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 });
     }
-    
-    // Los estudiantes solo pueden ver contenido publicado
-    if (session.user.role === UserRole.STUDENT && content.status !== ContentStatus.PUBLISHED) {
-      return NextResponse.json({ error: 'No tienes permisos para ver este contenido' }, { status: 403 });
-    }
-    
+
+    console.log(`[API] Successfully retrieved content: ${params.id}`);
     return NextResponse.json(content);
+    
   } catch (error) {
-    console.error('Error fetching content:', error);
-    return NextResponse.json({ 
-      error: 'Error al obtener el contenido',
-      details: error instanceof Error ? error.message : 'Error desconocido' 
-    }, { status: 500 });
+    console.error(`[API] Error fetching content ${params.id}:`, error);
+    return NextResponse.json(
+      { error: 'Error al obtener el contenido', details: error instanceof Error ? error.message : 'Error desconocido' },
+      { status: 500 }
+    );
   }
 }
 
 // PUT /api/contenidos/[id] - Actualizar un contenido
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -166,7 +166,7 @@ export async function PUT(
 
 // DELETE /api/contenidos/[id] - Eliminar un contenido
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
