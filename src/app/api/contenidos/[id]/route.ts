@@ -2,260 +2,170 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import prisma from '@/lib/prisma';
-import { ContentStatus, ContentType, UserRole } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import {
+  ContentStatus,
+  ContentType,
+  GradeLevel,
+  UserRole,
+} from '@prisma/client';
+import { z } from 'zod';
 
-// Validación básica para el objeto de contenido (reutilizable)
-const validateContentData = (data: any) => {
-  const errors: string[] = [];
-  
-  // Campos obligatorios
-  if (!data.title || typeof data.title !== 'string' || data.title.trim() === '') {
-    errors.push('El título es obligatorio');
-  }
-  
-  if (!data.type || !Object.values(ContentType).includes(data.type)) {
-    errors.push('El tipo de contenido es inválido o no está especificado');
-  }
-  
-  if (!data.status || !Object.values(ContentStatus).includes(data.status)) {
-    errors.push('El estado de contenido es inválido o no está especificado');
-  }
-  
-  // Validaciones específicas por tipo
-  if (data.type === ContentType.VIDEO || data.type === ContentType.PDF || data.type === ContentType.EXTERNAL_LINK) {
-    if (!data.contentUrl) {
-      errors.push(`La URL es obligatoria para contenido tipo ${data.type}`);
-    }
-  }
-  
-  if (data.type === ContentType.SIMULATION && !data.contentBody) {
-    errors.push('La configuración de la simulación es obligatoria');
-  }
-  
-  return errors;
-};
+/* ------------------------------------------------------------------ */
+/*  Configuración                                                     */
+/* ------------------------------------------------------------------ */
+export const dynamic = 'force-dynamic'; // evita SSG y asegura runtime server
 
-// GET /api/contenidos/[id] - Obtener un contenido específico
+const ContentSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().nullable().optional(),
+  summary: z.string().nullable().optional(),
+  type: z.nativeEnum(ContentType),
+  status: z.nativeEnum(ContentStatus),
+  contentUrl: z.string().url().nullable().optional(),
+  imageUrl: z.string().url().nullable().optional(),
+  contentBody: z.any().optional(),
+  tags: z.array(z.string()).default([]),
+  gradeLevels: z.array(z.nativeEnum(GradeLevel)).default([]),
+  curriculumNodeId: z.string().nullable().optional(),
+  authorName: z.string().optional(),
+  duration: z.number().int().positive().nullable().optional(),
+  visibility: z.enum(['public', 'private', 'restricted']).default('public'),
+});
+
+function assertAuth(session: any) {
+  if (!session)
+    throw NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+}
+
+/* ------------------------------------------------------------------ */
+/*  GET /api/contenidos/[id]                                          */
+/* ------------------------------------------------------------------ */
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  console.log('[API] GET /api/contenidos/[id] - Request for content:', params.id);
-  
-  try {
-    // Verificar autenticación
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      console.log('[API] Authentication failed for content retrieval');
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
+  const { id } = await ctx.params;            // ← esperar params
+  const session = await getServerSession(authOptions);
+  assertAuth(session);
 
-    if (!params.id) {
-      console.log('[API] Missing content ID parameter');
-      return NextResponse.json({ error: 'ID de contenido requerido' }, { status: 400 });
-    }
+  const where: any = { id };
+  if (session.user.role === UserRole.STUDENT)
+    where.status = ContentStatus.PUBLISHED;
 
-    // Buscar el contenido
-    const content = await prisma.contentResource.findUnique({
-      where: { id: params.id },
-      include: {
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            image: true
-          }
-        },
-        curriculumNode: true,
-      }
-    });
+  const content = await prisma.contentResource.findUnique({
+    where,
+    include: {
+      createdBy: {
+        select: { id: true, firstName: true, lastName: true }, // sin 'image'
+      },
+      curriculumNode: { select: { id: true, name: true, nodeType: true } },
+    },
+  });
 
-    // Verificar si existe
-    if (!content) {
-      console.log(`[API] Content not found: ${params.id}`);
-      return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 });
-    }
-
-    console.log(`[API] Successfully retrieved content: ${params.id}`);
-    return NextResponse.json(content);
-    
-  } catch (error) {
-    console.error(`[API] Error fetching content ${params.id}:`, error);
+  if (!content)
     return NextResponse.json(
-      { error: 'Error al obtener el contenido', details: error instanceof Error ? error.message : 'Error desconocido' },
-      { status: 500 }
+      { error: 'Contenido no encontrado' },
+      { status: 404 }
     );
-  }
+
+  return NextResponse.json(content, {
+    headers: { 'Cache-Control': 'no-store' },
+  });
 }
 
-// PUT /api/contenidos/[id] - Actualizar un contenido
+/* ------------------------------------------------------------------ */
+/*  PUT /api/contenidos/[id]                                          */
+/* ------------------------------------------------------------------ */
 export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  try {
-    // Verificar autenticación
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
-    
-    // Obtener el contenido existente
-    const existingContent = await prisma.contentResource.findUnique({
-      where: { id: params.id }
-    });
-    
-    // Si no existe, devolver 404
-    if (!existingContent) {
-      return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 });
-    }
-    
-    // Verificar permisos: solo el creador o administradores pueden editar
-    const isOwner = existingContent.createdById === session.user.id;
-    const isAdmin = [UserRole.SCHOOL_ADMIN, UserRole.DGE_ADMIN].includes(session.user.role as UserRole);
-    
-    if (!isOwner && !isAdmin) {
-      return NextResponse.json({ error: 'No tienes permisos para editar este contenido' }, { status: 403 });
-    }
-    
-    // Obtener datos de actualización
-    const contentData = await request.json();
-    
-    // Validar datos
-    const validationErrors = validateContentData(contentData);
-    if (validationErrors.length > 0) {
-      return NextResponse.json({ 
-        error: 'Datos de contenido inválidos', 
-        details: validationErrors 
-      }, { status: 400 });
-    }
-    
-    // Actualizar el contenido
-    const updatedContent = await prisma.contentResource.update({
-      where: { id: params.id },
-      data: {
-        title: contentData.title.trim(),
-        description: contentData.description?.trim(),
-        summary: contentData.summary?.trim(),
-        type: contentData.type,
-        status: contentData.status,
-        contentUrl: contentData.contentUrl,
-        imageUrl: contentData.imageUrl,
-        contentBody: contentData.contentBody,
-        tags: contentData.tags || [],
-        gradeLevels: contentData.gradeLevels || [],
-        curriculumNodeId: contentData.curriculumNodeId || null,
-        authorName: contentData.authorName?.trim(),
-        duration: contentData.duration || null,
-        visibility: contentData.visibility || 'public',
-        updatedAt: new Date()
-      }
-    });
-    
-    return NextResponse.json(updatedContent);
-  } catch (error) {
-    console.error('Error updating content:', error);
-    return NextResponse.json({ 
-      error: 'Error al actualizar el contenido',
-      details: error instanceof Error ? error.message : 'Error desconocido' 
-    }, { status: 500 });
-  }
+  const { id } = await ctx.params;
+  const session = await getServerSession(authOptions);
+  assertAuth(session);
+
+  const existing = await prisma.contentResource.findUnique({ where: { id } });
+  if (!existing)
+    return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 });
+
+  const isOwner = existing.createdById === session.user.id;
+  const isAdmin = [UserRole.SCHOOL_ADMIN, UserRole.DGE_ADMIN].includes(
+    session.user.role as UserRole
+  );
+  if (!isOwner && !isAdmin)
+    return NextResponse.json(
+      { error: 'No tienes permisos para editar este contenido' },
+      { status: 403 }
+    );
+
+  const body = await req.json();
+  const parse = ContentSchema.safeParse(body);
+  if (!parse.success)
+    return NextResponse.json(
+      { error: 'Datos inválidos', details: parse.error.flatten() },
+      { status: 400 }
+    );
+
+  const updated = await prisma.contentResource.update({
+    where: { id },
+    data: { ...parse.data, updatedAt: new Date() },
+  });
+
+  return NextResponse.json(updated);
 }
 
-// DELETE /api/contenidos/[id] - Eliminar un contenido
+/* ------------------------------------------------------------------ */
+/*  DELETE /api/contenidos/[id]                                       */
+/* ------------------------------------------------------------------ */
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  try {
-    // Verificar autenticación
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
-    
-    // Obtener el contenido existente
-    const existingContent = await prisma.contentResource.findUnique({
-      where: { id: params.id }
-    });
-    
-    // Si no existe, devolver 404
-    if (!existingContent) {
-      return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 });
-    }
-    
-    // Verificar permisos: solo el creador o administradores pueden eliminar
-    const isOwner = existingContent.createdById === session.user.id;
-    const isAdmin = [UserRole.SCHOOL_ADMIN, UserRole.DGE_ADMIN].includes(session.user.role as UserRole);
-    
-    if (!isOwner && !isAdmin) {
-      return NextResponse.json({ error: 'No tienes permisos para eliminar este contenido' }, { status: 403 });
-    }
-    
-    // Verificar dependencias: no se puede eliminar si hay asignaciones activas
-    const assignments = await prisma.assignment.count({
-      where: {
-        contentResourceId: params.id
-      }
-    });
-    
-    if (assignments > 0) {
-      return NextResponse.json({ 
-        error: 'No se puede eliminar el contenido porque está asignado a una o más clases. Desasígnelo primero.' 
-      }, { status: 400 });
-    }
-    
-    // Si tiene evaluaciones asociadas, eliminarlas primero
-    const evaluation = await prisma.evaluation.findUnique({
-      where: { contentResourceId: params.id },
-      include: { questions: true }
-    });
-    
-    if (evaluation) {
-      // Eliminar preguntas de la evaluación
-      await prisma.question.deleteMany({
-        where: { evaluationId: evaluation.id }
-      });
-      
-      // Eliminar evaluación
-      await prisma.evaluation.delete({
-        where: { id: evaluation.id }
-      });
-    }
-    
-    // Eliminar comentarios si existen
-    await prisma.comment.deleteMany({
-      where: { contentResourceId: params.id }
-    });
-    
-    // Eliminar posiciones en secuencias si existen
-    await prisma.sequencePosition.deleteMany({
-      where: { contentResourceId: params.id }
-    });
-    
-    // Eliminar el progreso de contenido si existe
-    await prisma.contentProgress.deleteMany({
-      where: { contentResourceId: params.id }
-    });
-    
-    // Eliminar recomendaciones de contenido si existen
-    await prisma.contentRecommendation.deleteMany({
-      where: { contentResourceId: params.id }
-    });
-    
-    // Finalmente, eliminar el contenido
-    await prisma.contentResource.delete({
-      where: { id: params.id }
-    });
-    
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting content:', error);
-    return NextResponse.json({ 
-      error: 'Error al eliminar el contenido',
-      details: error instanceof Error ? error.message : 'Error desconocido' 
-    }, { status: 500 });
-  }
+  const { id } = await ctx.params;
+  const session = await getServerSession(authOptions);
+  assertAuth(session);
+
+  const existing = await prisma.contentResource.findUnique({ where: { id } });
+  if (!existing)
+    return NextResponse.json({ error: 'Contenido no encontrado' }, { status: 404 });
+
+  const isOwner = existing.createdById === session.user.id;
+  const isAdmin = [UserRole.SCHOOL_ADMIN, UserRole.DGE_ADMIN].includes(
+    session.user.role as UserRole
+  );
+  if (!isOwner && !isAdmin)
+    return NextResponse.json(
+      { error: 'No tienes permisos para eliminar este contenido' },
+      { status: 403 }
+    );
+
+  const asignaciones = await prisma.assignment.count({
+    where: { contentResourceId: id },
+  });
+  if (asignaciones > 0)
+    return NextResponse.json(
+      {
+        error:
+          'No se puede eliminar: el contenido está asignado a una o más clases',
+      },
+      { status: 400 }
+    );
+
+  // borrado en cascada (transacción)
+  await prisma.$transaction([
+    prisma.question.deleteMany({
+      where: { evaluation: { contentResourceId: id } },
+    }),
+    prisma.evaluation.deleteMany({ where: { contentResourceId: id } }),
+    prisma.comment.deleteMany({ where: { contentResourceId: id } }),
+    prisma.sequencePosition.deleteMany({ where: { contentResourceId: id } }),
+    prisma.contentProgress.deleteMany({ where: { contentResourceId: id } }),
+    prisma.contentRecommendation.deleteMany({
+      where: { contentResourceId: id },
+    }),
+    prisma.contentResource.delete({ where: { id } }),
+  ]);
+
+  return NextResponse.json({ success: true });
 }

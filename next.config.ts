@@ -1,13 +1,32 @@
-// next.config.ts - Verificar y simplificar
-import type { NextConfig } from "next";
+// next.config.ts
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  webpack: (config, { isServer }) => {
-    // Evitar bundling de módulos nativos en cliente
+
+  /* ───────────────  IMAGES  ─────────────── */
+  images: {
+    remotePatterns: [
+      // Unsplash
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        pathname: '/**',
+      },
+      // Agregá otros orígenes externos acá ↓
+      // {
+      //   protocol: 'https',
+      //   hostname: 'cdn.tusitio.com',
+      //   pathname: '/media/**',
+      // },
+    ],
+  },
+
+  /* ───────────────  WEBPACK  ─────────────── */
+  webpack(config, { isServer }) {
     if (!isServer) {
-      // Fallback de módulos Node.js
+      // Evitar bundling de módulos nativos en el lado cliente
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
@@ -15,7 +34,8 @@ const nextConfig: NextConfig = {
         module: false,
         util: false,
       };
-      // Aliasing de módulos problemáticos
+
+      // Alias a módulos sólo-servidor para que no se incluyan en el bundle
       config.resolve.alias = {
         ...config.resolve.alias,
         bcrypt: false,
@@ -25,7 +45,8 @@ const nextConfig: NextConfig = {
         '@prisma/client/runtime/library.mjs': false,
         'node:module': false,
       };
-      // Externals para librerías de servidor
+
+      // Marcar Prisma como external para el bundle del browser
       config.externals = [
         ...(config.externals as any),
         /^@prisma\/client($|\/)/,
