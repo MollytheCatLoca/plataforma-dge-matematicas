@@ -11,171 +11,88 @@ interface ExternalLinkFormProps {
 export default function ExternalLinkForm({ data, onChange }: ExternalLinkFormProps) {
   const [linkUrl, setLinkUrl] = useState(data.contentUrl || '');
   const [sourceType, setSourceType] = useState(data.contentBody?.sourceType || 'generic');
-  const [previewError, setPreviewError] = useState('');
   
-  // Actualizar el contentUrl cuando cambie la URL
+  // Actualizar estado cuando cambian los props
   useEffect(() => {
-    onChange({ 
-      contentUrl: linkUrl,
-      contentBody: {
-        ...data.contentBody,
-        sourceType
-      }
-    });
-  }, [linkUrl, sourceType, onChange, data.contentBody]);
+    setLinkUrl(data.contentUrl || '');
+    setSourceType(data.contentBody?.sourceType || 'generic');
+  }, [data.contentUrl, data.contentBody]);
 
-  // Verificar si es una URL válida
-  const isValidUrl = (url: string): boolean => {
-    try {
-      new URL(url);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  };
-
-  // Manejar cambio de URL
-  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newUrl = e.target.value;
-    setLinkUrl(newUrl);
+  // Generar URL para embebido según el tipo de recurso
+  const getEmbedUrl = (): string => {
+    if (!linkUrl) return '';
     
-    if (newUrl && !isValidUrl(newUrl)) {
-      setPreviewError('La URL no parece ser válida');
-    } else {
-      setPreviewError('');
+    // Configuraciones específicas según el tipo
+    switch (sourceType) {
+      case 'geogebra':
+        // Añadir parámetros específicos de GeoGebra
+        const showToolbar = data.contentBody?.showToolbar || false;
+        try {
+          const geogebraUrl = new URL(linkUrl);
+          
+          if (!geogebraUrl.searchParams.has('toolbar')) {
+            geogebraUrl.searchParams.set('toolbar', showToolbar ? '1' : '0');
+          }
+          
+          return geogebraUrl.toString();
+        } catch (e) {
+          return linkUrl;
+        }
       
-      // Detectar automáticamente el tipo de fuente
-      if (newUrl.includes('geogebra.org')) {
-        setSourceType('geogebra');
-      } else if (newUrl.includes('desmos.com')) {
-        setSourceType('desmos');
-      } else if (newUrl.includes('phet.colorado.edu')) {
-        setSourceType('phet');
-      } else if (newUrl.includes('khan')) {
-        setSourceType('khan');
-      } else {
-        setSourceType('generic');
-      }
+      default:
+        return linkUrl;
     }
   };
 
   return (
     <div className="space-y-4">
-      <div className="mb-2">
-        <h3 className="text-lg font-medium text-gray-700">Enlace Externo</h3>
-        <p className="text-sm text-gray-500">
-          Introduce un enlace a un recurso educativo externo, como GeoGebra, Desmos, PhET u otros.
-        </p>
+      {/* Visor de recurso externo */}
+      <div className="aspect-video bg-white border border-gray-200 rounded-md overflow-hidden">
+        <iframe
+          src={getEmbedUrl()}
+          className="w-full h-full"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          allow="accelerometer; autoplay; camera; microphone; clipboard-write; encrypted-media; gyroscope;"
+          frameBorder="0"
+          allowFullScreen
+          title={data.title || "Recurso externo"}
+        ></iframe>
       </div>
-
-      <div>
-        <label htmlFor="linkUrl" className="block text-sm font-medium text-gray-700 mb-1">
-          URL del Recurso <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="url"
-          id="linkUrl"
-          value={linkUrl}
-          onChange={handleUrlChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="https://www.geogebra.org/m/example"
-          required
-        />
-        
-        {previewError && (
-          <p className="mt-1 text-sm text-red-600">{previewError}</p>
-        )}
-        
-        <p className="mt-1 text-xs text-gray-500">
-          La URL debe apuntar directamente al recurso que deseas incorporar.
+      
+      {/* Información adicional */}
+      <div className="p-4 bg-blue-50 rounded-md">
+        <h3 className="text-lg font-medium text-blue-800 mb-2">
+          Recurso Externo: {sourceTypeLabel(sourceType)}
+        </h3>
+        <p className="text-blue-700 mb-2">
+          Estás visualizando un recurso alojado en un sitio externo.
         </p>
-      </div>
-
-      <div>
-        <label htmlFor="sourceType" className="block text-sm font-medium text-gray-700 mb-1">
-          Tipo de Recurso
-        </label>
-        <select
-          id="sourceType"
-          value={sourceType}
-          onChange={(e) => setSourceType(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <a 
+          href={linkUrl} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-blue-600 hover:underline flex items-center"
         >
-          <option value="generic">Genérico</option>
-          <option value="geogebra">GeoGebra</option>
-          <option value="desmos">Desmos</option>
-          <option value="phet">PhET (Simulaciones)</option>
-          <option value="khan">Khan Academy</option>
-          <option value="other">Otro</option>
-        </select>
-        <p className="mt-1 text-xs text-gray-500">
-          Seleccionar el tipo correcto mejora la integración con la plataforma.
-        </p>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          Abrir en una nueva ventana
+        </a>
       </div>
-
-      {/* Previsualización de enlace */}
-      {linkUrl && !previewError && (
-        <div className="mt-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Previsualización:</h4>
-          <div className="p-4 border border-gray-300 rounded-md">
-            {sourceType === 'geogebra' || sourceType === 'desmos' || sourceType === 'phet' ? (
-              <div className="aspect-video bg-gray-100 rounded-md overflow-hidden">
-                <iframe
-                  src={linkUrl}
-                  className="w-full h-full"
-                  frameBorder="0"
-                  allowFullScreen
-                  title="Vista previa del recurso"
-                ></iframe>
-              </div>
-            ) : (
-              <div className="p-4 bg-gray-50 rounded-md">
-                <p className="text-sm text-center">
-                  <a href={linkUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
-                    {linkUrl}
-                  </a>
-                </p>
-                <p className="text-xs text-center mt-2 text-gray-500">
-                  (Abre en una nueva ventana)
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Campos específicos según el tipo de recurso */}
-      {sourceType === 'geogebra' && (
-        <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Opciones para GeoGebra:</h4>
-          <div className="flex items-center mt-2">
-            <input
-              type="checkbox"
-              id="show-toolbar"
-              checked={data.contentBody?.showToolbar || false}
-              onChange={(e) => {
-                onChange({
-                  contentBody: {
-                    ...data.contentBody,
-                    showToolbar: e.target.checked
-                  }
-                });
-              }}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <label htmlFor="show-toolbar" className="ml-2 block text-sm text-gray-700">
-              Mostrar barra de herramientas
-            </label>
-          </div>
-          <p className="mt-1 text-xs text-gray-500">
-            <a href="https://wiki.geogebra.org/en/Reference:GeoGebra_App_Parameters" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-              Ver documentación de GeoGebra para más opciones
-            </a>
-          </p>
-        </div>
-      )}
-
-      {/* Más campos específicos según tipo de recurso... */}
     </div>
   );
+}
+
+// Función para mostrar etiqueta amigable del tipo de recurso
+function sourceTypeLabel(sourceType: string): string {
+  const labels: Record<string, string> = {
+    'generic': 'Recurso Web',
+    'geogebra': 'GeoGebra',
+    'desmos': 'Desmos',
+    'phet': 'PhET (Simulación)',
+    'khan': 'Khan Academy',
+    'other': 'Otro Recurso'
+  };
+  
+  return labels[sourceType] || 'Recurso Web';
 }

@@ -1,72 +1,110 @@
 'use client';
 
-import React, { useState, ChangeEvent } from 'react';
+import { useState, useEffect } from 'react';
+import { ContentFormData } from '../ContentForm';
 
-// Define props interface
 interface SimulationContentFormProps {
-  initialData?: { contentBody?: any }; // Adjust 'any' to a more specific type if possible
-  onChange: (data: { contentBody?: any }) => void; // Adjust 'any' if possible
+  data: ContentFormData;
+  onChange: (data: Partial<ContentFormData>) => void;
 }
 
-// Define the component function with explicit types
-const SimulationContentForm: React.FC<SimulationContentFormProps> = ({ initialData, onChange }) => {
-  // --- State ---
-  // Use a more specific type for simulationConfig if possible
-  const [simulationConfig, setSimulationConfig] = useState<any>(initialData?.contentBody || {});
+export default function SimulationContentForm({ data, onChange }: SimulationContentFormProps) {
+  const [simulationConfig, setSimulationConfig] = useState<any>(data.contentBody || {});
+  const [simulationState, setSimulationState] = useState<any>(null);
+  const [interactions, setInteractions] = useState(0);
 
-  // --- Event Handlers ---
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    const newConfig = { ...simulationConfig, [name]: value };
-    setSimulationConfig(newConfig);
-    onChange({ contentBody: newConfig });
+  // Actualizar configuración cuando cambian los datos
+  useEffect(() => {
+    setSimulationConfig(data.contentBody || {});
+  }, [data.contentBody]);
+
+  // Manejar interacción con la simulación
+  const handleInteraction = () => {
+    setInteractions(prev => prev + 1);
   };
 
-  // --- Return JSX ---
   return (
-    <div className="space-y-4">
-      <div className="mb-2">
-        <h3 className="text-lg font-medium text-gray-700">Simulación Interactiva</h3>
-        <p className="text-sm text-gray-500">
-          Configure los parámetros específicos para la simulación interactiva.
+    <div className="simulation-content">
+      <div className="p-4 mb-4 bg-blue-50 rounded-md">
+        <h3 className="text-lg font-semibold text-blue-800 mb-2">
+          {simulationConfig.title || "Simulación Interactiva"}
+        </h3>
+        <p className="text-blue-700">
+          {simulationConfig.description || "Interactúa con la simulación para explorar el concepto."}
         </p>
       </div>
-
-      {/* Example: Add form fields for simulation parameters */}
-      <div>
-        <label htmlFor="simulationParam1" className="block text-sm font-medium text-gray-700">
-          Parámetro de Simulación 1
-        </label>
-        <input
-          type="text"
-          id="simulationParam1"
-          name="param1" // Make sure name matches the key in simulationConfig
-          value={simulationConfig.param1 || ''}
-          onChange={handleInputChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-          placeholder="Valor del parámetro 1"
-        />
+      
+      {/* Contenedor de simulación */}
+      <div 
+        className="aspect-video bg-white border border-gray-300 rounded-md p-6 flex flex-col items-center justify-center"
+        onClick={handleInteraction}
+      >
+        <div className="text-center mb-6">
+          <h3 className="text-xl font-bold mb-2">
+            {simulationConfig.param1 || "Simulación"}
+          </h3>
+          <p className="text-gray-600">
+            {simulationConfig.param2 ? 
+              (typeof simulationConfig.param2 === 'string' ? 
+                simulationConfig.param2 : 
+                JSON.stringify(simulationConfig.param2)
+              ) : 
+              "Haga clic en los elementos para interactuar con ellos."
+            }
+          </p>
+        </div>
+        
+        <div className="flex space-x-4 my-4">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleInteraction();
+              setSimulationState(prev => ({ ...prev, value: (prev?.value || 0) + 1 }));
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Incrementar
+          </button>
+          
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleInteraction();
+              setSimulationState(prev => ({ ...prev, value: (prev?.value || 0) - 1 }));
+            }}
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+          >
+            Decrementar
+          </button>
+          
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleInteraction();
+              setSimulationState({ value: 0 });
+            }}
+            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+          >
+            Reiniciar
+          </button>
+        </div>
+        
+        <div className="text-4xl font-bold my-4">
+          {simulationState?.value || 0}
+        </div>
+        
+        <p className="text-sm text-gray-500 mt-4">
+          Interacciones: {interactions}
+        </p>
       </div>
-
-      <div>
-        <label htmlFor="simulationParam2" className="block text-sm font-medium text-gray-700">
-          Parámetro de Simulación 2 (JSON)
-        </label>
-        <textarea
-          id="simulationParam2"
-          name="param2" // Make sure name matches the key in simulationConfig
-          value={typeof simulationConfig.param2 === 'string' ? simulationConfig.param2 : JSON.stringify(simulationConfig.param2 || {}, null, 2)}
-          onChange={handleInputChange} // You might need a specific handler for JSON
-          rows={4}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-          placeholder='{ "key": "value" }'
-        />
-        {/* Add validation/error display for JSON if needed */}
-      </div>
-
-      {/* Add more fields as required for your simulation configuration */}
+      
+      {/* Ayuda de la simulación si está disponible */}
+      {simulationConfig.helpText && (
+        <div className="mt-4 p-4 bg-gray-50 rounded-md">
+          <h4 className="font-medium mb-2">Ayuda:</h4>
+          <p className="text-gray-700">{simulationConfig.helpText}</p>
+        </div>
+      )}
     </div>
   );
-};
-
-export default SimulationContentForm;
+}
