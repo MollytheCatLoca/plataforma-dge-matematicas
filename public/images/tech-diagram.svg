@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#6366F1" stop-opacity="0.2"/>
+    </linearGradient>
+    <pattern id="dots" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#FFFFFF" fill-opacity="0.1"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="600" fill="url(#grad1)"/>
+  <rect width="800" height="600" fill="url(#dots)"/>
+  <g stroke="#FFFFFF" stroke-opacity="0.3" stroke-width="1">
+    <line x1="100" y1="500" x2="300" y2="350"/>
+    <line x1="300" y1="350" x2="500" y2="450"/>
+    <line x1="200" y1="200" x2="400" y2="150"/>
+    <line x1="400" y1="150" x2="600" y2="300"/>
+  </g>
+  <g fill="#FFFFFF" fill-opacity="0.6">
+    <circle cx="100" cy="500" r="6"/>
+    <circle cx="300" cy="350" r="6"/>
+    <circle cx="500" cy="450" r="6"/>
+    <circle cx="200" cy="200" r="6"/>
+    <circle cx="400" cy="150" r="6"/>
+    <circle cx="600" cy="300" r="6"/>
+  </g>
+</svg>

@@ -1,66 +1,81 @@
+// src/app/api/contenidos/[id]/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import prisma from '@/lib/prisma';
+
 export async function GET(
-  _req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
-  const { id } = await ctx.params;
+  console.log(`[API_DEBUG] Iniciando solicitud GET para contenido`);
   
-  // Bypass temporal para pruebas + logging
-  console.log(`[API DEBUG] Recibiendo solicitud para contenido ID: ${id}`);
-  
-  // Usar la importación existente de UserRole
-  // No necesitamos agregar otra importación porque ya está en el archivo
-  const session = { user: { role: UserRole.TEACHER } };
-  
-  // Comentar temporalmente la autenticación real
-  // const session = await getServerSession(authOptions);
-  // assertAuth(session);
-
-  console.log(`[API DEBUG] Buscando contenido con ID: ${id}`);
-  
-  const where: any = { id };
-  if (session.user.role === UserRole.STUDENT)
-    where.status = ContentStatus.PUBLISHED;
-
   try {
+    // Resolver parámetros
+    const resolvedParams = await Promise.resolve(params);
+    const contentId = resolvedParams.id;
+    console.log(`[API_DEBUG] ID de contenido solicitado: ${contentId}`);
+    
+    // Verificar cookies y headers
+    console.log(`[API_DEBUG] Cookies: ${request.headers.get('cookie')}`);
+    console.log(`[API_DEBUG] Referrer: ${request.headers.get('referer')}`);
+    
+    // Intentar obtener sesión
+    console.log(`[API_DEBUG] Obteniendo sesión...`);
+    const session = await getServerSession(authOptions);
+    console.log(`[API_DEBUG] Sesión obtenida:`, session ? 'Sí' : 'No');
+    
+    if (session) {
+      console.log(`[API_DEBUG] Usuario autenticado: ${session.user?.email}, Rol: ${session.user?.role}`);
+    } else {
+      console.log(`[API_DEBUG] No hay sesión activa`);
+    }
+    
+    // Consultar base de datos
+    console.log(`[API_DEBUG] Consultando base de datos...`);
     const content = await prisma.contentResource.findUnique({
-      where,
+      where: { id: contentId },
       include: {
         createdBy: {
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true }
         },
-        curriculumNode: { select: { id: true, name: true, nodeType: true } },
-      },
+        curriculumNode: { 
+          select: { id: true, name: true, nodeType: true } 
+        },
+        evaluation: {
+          include: {
+            questions: {
+              orderBy: { order: 'asc' }
+            }
+          }
+        }
+      }
     });
-
+    
+    console.log(`[API_DEBUG] Resultado de la consulta:`, content ? 'Contenido encontrado' : 'Contenido no encontrado');
+    
     if (!content) {
-      console.log(`[API DEBUG] Contenido no encontrado para ID: ${id}`);
+      console.log(`[API_DEBUG] Enviando respuesta 404`);
       return NextResponse.json(
-        { error: 'Contenido no encontrado' },
+        { error: 'Contenido no encontrado', id: contentId },
         { status: 404 }
       );
     }
-
-    console.log(`[API DEBUG] Contenido encontrado:`, {
-      id: content.id,
-      title: content.title,
-      type: content.type,
-      contentBodyExists: content.contentBody !== null
-    });
     
-    // Loguear contentBody para depuración
-    if (content.contentBody) {
-      console.log(`[API DEBUG] ContentBody:`, content.contentBody);
-    } else {
-      console.log(`[API DEBUG] ContentBody es NULL`);
-    }
-
+    // Preparar respuesta
+    console.log(`[API_DEBUG] Preparando respuesta con contenido ID: ${content.id}, Título: ${content.title}`);
+    
     return NextResponse.json(content, {
-      headers: { 'Cache-Control': 'no-store' },
+      headers: { 'Cache-Control': 'no-store' }
     });
   } catch (error) {
-    console.error(`[API DEBUG] Error al buscar contenido:`, error);
+    console.error(`[API_DEBUG] Error en API:`, error);
     return NextResponse.json(
-      { error: 'Error interno del servidor' },
+      { 
+        error: 'Error interno del servidor',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     );
   }

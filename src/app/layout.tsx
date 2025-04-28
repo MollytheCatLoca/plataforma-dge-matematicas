@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import AuthContext from '@/context/AuthContext';
+import ErrorBoundaryClient from '@/components/ErrorBoundaryClient';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -23,7 +24,9 @@ export default function RootLayout({ children }: Readonly<RootLayoutProps>) {
         <AuthContext>
           {/* Podés insertar acá un componente <Header /> si lo necesitás */}
           <main className="min-h-screen">
-            {children}
+            <ErrorBoundaryClient>
+              {children}
+            </ErrorBoundaryClient>
           </main>
           {/* Y acá un <Footer /> */}
         </AuthContext>

@@ -1,32 +1,62 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ContentFormData } from '../ContentForm';
-import MathRenderer from '@/components/MathRenderer';
+import React, { useMemo } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 interface TextContentFormProps {
-  data: ContentFormData;
-  onChange: (data: Partial<ContentFormData>) => void;
+  data: {
+    contentBody?: {
+      text?: string;
+      format?: string;
+    } | string;
+  };
+  viewMode?: boolean;
+  onChange?: () => void;
 }
 
-export default function TextContentForm({ data, onChange }: TextContentFormProps) {
-  const [contentText, setContentText] = useState(data.contentBody?.text || '');
-  const [previewMode, setPreviewMode] = useState(true); // En modo visualización, siempre mostrar preview
-
-  // Inicializar el contenido desde los datos
-  useEffect(() => {
-    // Actualizar solo cuando cambian los datos externos
-    setContentText(data.contentBody?.text || '');
-    // Forzar modo preview para visualización
-    setPreviewMode(true);
+export default function TextContentForm({
+  data,
+  viewMode,
+  onChange,
+}: TextContentFormProps) {
+  // 1) Extraemos text (sea string u objeto)
+  const text = useMemo(() => {
+    if (typeof data.contentBody === 'string') {
+      return data.contentBody;
+    }
+    if (
+      data.contentBody &&
+      typeof data.contentBody === 'object' &&
+      typeof data.contentBody.text === 'string'
+    ) {
+      return data.contentBody.text;
+    }
+    return '';
   }, [data.contentBody]);
 
-  return (
-    <div className="space-y-4">
-      {/* Solo mostrar el contenido, sin la barra de herramientas ni botones de edición */}
-      <div className="border border-gray-300 rounded-md p-4 bg-white min-h-[300px] prose max-w-none">
-        <MathRenderer text={contentText} />
+  // 2) Debug en consola para asegurarnos
+  console.log('TextContentForm → text extraído:', text.slice(0, 100), '…');
+
+  // 3) Renderizado
+  if (!text) {
+    return (
+      <div className="p-4 border rounded-md bg-gray-50 text-gray-500 italic">
+        No se encontró texto en contentBody
       </div>
+    );
+  }
+
+  return (
+    <div className="prose max-w-none mode-view">
+      <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+      >
+        {text}
+      </ReactMarkdown>
     </div>
   );
 }

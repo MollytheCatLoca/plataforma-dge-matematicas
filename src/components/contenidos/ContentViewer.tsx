@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { ContentType } from '@prisma/client';
-import TextContentForm from '../content-types/TextContentForm';
-import VideoContentForm from '../content-types/VideoContentForm';
-import PdfContentForm from '../content-types/PdfContentForm';
-import SimulationContentForm from '../content-types/SimulationContentForm';
-import QuizRenderer from '../QuizRenderer';
-import ExternalLinkForm from '../content-types/ExternalLinkForm';
+import TextContentForm from './content-types/TextContentForm';
+import VideoContentForm from './content-types/VideoContentForm';
+import PdfContentForm from './content-types/PdfContentForm';
+import SimulationContentForm from './content-types/SimulationContentForm';
+import QuizRenderer from './QuizRenderer';
+import ExternalLinkForm from './content-types/ExternalLinkForm';
+import ContentAssistant from '../ContentAssistant';
 
 // Define la interfaz para el contenido según tu modelo Prisma
 export interface ContentResource {
@@ -81,9 +82,11 @@ export default function ContentViewer({ content, onProgressUpdate }: ContentView
     }
   };
   
-  // Adaptador para transformar ContentResource a ContentFormData
-  const adaptContentToFormData = () => {
-    return {
+  // Renderizar el componente específico según el tipo de contenido
+  const renderContent = () => {
+    // IMPORTANTE: Creamos directamente el objeto formData aquí, NO a través de una función
+    // Esta es la corrección principal para evitar problemas de referencia
+    const formData = {
       title: content.title,
       description: content.description || '',
       summary: content.summary || '',
@@ -91,7 +94,7 @@ export default function ContentViewer({ content, onProgressUpdate }: ContentView
       status: content.status,
       contentUrl: content.contentUrl || '',
       imageUrl: content.imageUrl || '',
-      contentBody: content.contentBody || {},
+      contentBody: content.contentBody, // Pasamos directamente, sin modificar
       tags: content.tags || [],
       gradeLevels: content.gradeLevels || [],
       curriculumNodeId: content.curriculumNodeId || '',
@@ -99,26 +102,36 @@ export default function ContentViewer({ content, onProgressUpdate }: ContentView
       duration: content.duration || 0,
       visibility: content.visibility || 'public'
     };
-  };
-  
-  // Función de onChange simulada para los componentes Form
-  const handleFormChange = () => {
-    // No hacemos nada, solo es para cumplir con la interfaz
-    console.log("Cambio ignorado en modo visualización");
-  };
-  
-  // Renderizar el componente específico según el tipo de contenido
-  const renderContent = () => {
-    const formData = adaptContentToFormData();
+    
     
     switch (content.type) {
       case ContentType.TEXT_CONTENT:
         return (
           <div className="prose max-w-none mode-view">
-            <TextContentForm 
-              data={formData}
-              onChange={handleFormChange}
-            />
+            {/* Contenido básico antes del componente específico */}
+            <div className="mb-4">
+              {content.imageUrl && (
+                <img 
+                  src={content.imageUrl} 
+                  alt={content.title}
+                  className="w-full h-48 object-cover rounded-md mb-4" 
+                />
+              )}
+        
+              {content.description && (
+                <p className="text-gray-600 mb-4">{content.description}</p>
+              )}
+            </div>
+            
+            {/* IMPORTANTE: JSON personalizado solo para TextContentForm */}
+           
+            
+            {/* Usando datos directos para TextContentForm */}
+            <TextContentForm
+  data={{ contentBody: content.contentBody }}
+  viewMode={true}
+/>
+
           </div>
         );
         
@@ -126,7 +139,7 @@ export default function ContentViewer({ content, onProgressUpdate }: ContentView
         return (
           <VideoContentForm 
             data={formData}
-            onChange={handleFormChange}
+            onChange={() => {}}
           />
         );
         
@@ -134,7 +147,7 @@ export default function ContentViewer({ content, onProgressUpdate }: ContentView
         return (
           <PdfContentForm 
             data={formData}
-            onChange={handleFormChange}
+            onChange={() => {}}
           />
         );
         
@@ -142,7 +155,7 @@ export default function ContentViewer({ content, onProgressUpdate }: ContentView
         return (
           <SimulationContentForm 
             data={formData}
-            onChange={handleFormChange}
+            onChange={() => {}}
           />
         );
         
@@ -150,7 +163,7 @@ export default function ContentViewer({ content, onProgressUpdate }: ContentView
         return (
           <ExternalLinkForm 
             data={formData}
-            onChange={handleFormChange}
+            onChange={() => {}}
           />
         );
         
@@ -190,7 +203,10 @@ export default function ContentViewer({ content, onProgressUpdate }: ContentView
   };
   
   return (
-    <div className="content-viewer">
+    <div className="content-viewer bg-white p-6 rounded-lg shadow-md">
+      {/* Información de debug */}
+      
+      
       {/* Barra de progreso */}
       {progress > 0 && (
         <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
@@ -204,6 +220,65 @@ export default function ContentViewer({ content, onProgressUpdate }: ContentView
       {/* Contenido específico */}
       <div className="content-display">
         {renderContent()}
+      </div>
+      
+      {/* Contenido crudo (para debug) */}
+      <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
+       
+        <pre className="text-sm text-gray-600">
+        <ContentAssistant />
+        </pre>
+      </div>
+      
+      {/* Información adicional */}
+      <div className="mt-8 pt-4 border-t border-gray-200">
+        <div className="flex items-center justify-between text-sm text-gray-500">
+          <div className="flex items-center space-x-2">
+            {content.createdBy && (
+              <>
+                {content.createdBy.image ? (
+                  <img 
+                    src={content.createdBy.image} 
+                    alt={`${content.createdBy.firstName} ${content.createdBy.lastName}`}
+                    className="w-6 h-6 rounded-full"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
+                    <span className="text-xs text-gray-600">
+                      {content.createdBy.firstName?.charAt(0)}
+                      {content.createdBy.lastName?.charAt(0)}
+                    </span>
+                  </div>
+                )}
+                <span>
+                  {content.createdBy.firstName} {content.createdBy.lastName}
+                </span>
+              </>
+            )}
+            
+            {!content.createdBy && content.authorName && (
+              <span>{content.authorName}</span>
+            )}
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            {content.duration && (
+              <div className="flex items-center space-x-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{content.duration} min</span>
+              </div>
+            )}
+            
+            <div className="flex items-center space-x-1">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span>{new Date(content.createdAt).toLocaleDateString()}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
